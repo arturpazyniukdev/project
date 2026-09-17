@@ -37,6 +37,10 @@ class InsufficientFundsError(BankError):
     pass
 
 
+class AuthenticationError(BankError):
+    pass
+
+
 class AbstractAccount(ABC):
     def __init__(
         self,
@@ -120,6 +124,30 @@ class AbstractAccount(ABC):
     @abstractmethod
     def withdraw(self, amount):
         pass
+
+    def close(self):
+        if self._status is AccountStatus.CLOSED:
+            raise AccountClosedError("account already closed")
+
+        self._status = AccountStatus.CLOSED
+
+    def freeze(self):
+        if self._status is AccountStatus.CLOSED:
+            raise AccountClosedError("can't freeze a closed account")
+
+        if self._status is AccountStatus.FROZEN:
+            raise InvalidOperationError("account already frozen")
+
+        self._status = AccountStatus.FROZEN
+
+    def unfreeze(self):
+        if self._status is AccountStatus.CLOSED:
+            raise AccountClosedError("can't unfreeze a closed account")
+
+        if self._status is AccountStatus.ACTIVE:
+            raise InvalidOperationError("can't unfreeze an active account")
+
+        self._status = AccountStatus.ACTIVE
 
     def _ensure_active(self, operation):
         if self._status is AccountStatus.ACTIVE:
@@ -308,7 +336,7 @@ class PremiumAccount(BankAccount):
             **super().get_account_info(),
             "withdrawal_fee": self._withdrawal_fee,
             "overdraft_limit": self._overdraft_limit,
-            "max_withdrawal": self._max_withdrawal
+            "max_withdrawal": self._max_withdrawal,
         }
 
     def __str__(self):
@@ -368,11 +396,11 @@ class InvestmentAccount(BankAccount):
         total = 0
 
         for key in growth_rates.keys():
-            growth = round(self._portfolio[key] * growth_rates[key],2 )
+            growth = round(self._portfolio[key] * growth_rates[key], 2)
             by_asset[key] = growth
             total += growth
 
-        return {"by_asset": by_asset, "total": round(total,2)}
+        return {"by_asset": by_asset, "total": round(total, 2)}
 
     def withdraw(self, amount):
         super().withdraw(amount)
