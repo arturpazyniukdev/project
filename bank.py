@@ -9,6 +9,7 @@ from account import (
     AuthenticationError,
     InvalidOperationError,
 )
+from validators import ensure_number
 
 
 class ClientStatus(Enum):
@@ -38,7 +39,21 @@ class Client:
             raise ValueError("full_name should not be empty")
 
         self._full_name = full_name
-        self._client_id = client_id if client_id is not None else uuid4().hex
+        
+        if client_id is None:
+            self._client_id = uuid4().hex
+        else:
+            if not isinstance(client_id, str):
+                raise TypeError(
+                    f"client_id must be a string, got {type(client_id).__name__}"
+                )
+                
+            client_id = client_id.strip()
+            
+            if len(client_id) == 0:
+                raise ValueError("client_id should not be empty")
+            
+            self._client_id = client_id
 
         if not isinstance(status, ClientStatus):
             raise TypeError(
@@ -224,36 +239,18 @@ class Bank:
             )
 
     def deposit(self, account_id, amount):
-        if not isinstance(account_id, str):
-            raise TypeError(
-                f"account_id must be a string, got {type(account_id).__name__}"
-            )
+        ensure_number(amount, "amount")
 
         account = self._get_account(account_id)
         self._ensure_operating_hours("deposit", account_id)
 
-
-        if not isinstance(amount, (int, float)) or isinstance(amount, bool):
-            raise TypeError(
-                f"amount must be an int or float, got {type(amount).__name__}"
-            )
-
         account.deposit(amount)
 
     def withdraw(self, account_id, amount):
-        if not isinstance(account_id, str):
-            raise TypeError(
-                f"account_id must be a string, got {type(account_id).__name__}"
-            )
+        ensure_number(amount, "amount")
 
         account = self._get_account(account_id)
         self._ensure_operating_hours("withdraw", account_id)
-
-
-        if not isinstance(amount, (int, float)) or isinstance(amount, bool):
-            raise TypeError(
-                f"amount must be an int or float, got {type(amount).__name__}"
-            )
 
         if amount >= self.LARGE_WITHDRAWAL:
             self._flag_suspicious("large_withdrawal", account_id, f"amount {amount}")

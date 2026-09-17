@@ -21,6 +21,7 @@ class NightClock(datetime):
     def now(cls, tz=None):
         return datetime(2026, 1, 1, 2, 30)
 
+
 bank = Bank()
 
 
@@ -113,7 +114,7 @@ expect_error(
     lambda: bank.authenticate_client(artur.client_id, "123"),
     AuthenticationError,
 )
-print(artur.is_active())   
+print(artur.is_active())
 expect_error(
     "non active clients cannot login",
     lambda: bank.authenticate_client(artur.client_id, "123"),
@@ -164,8 +165,16 @@ maria_premium_account = PremiumAccount(maria.full_name, 200)
 bank.open_account(maria.client_id, maria_premium_account)
 
 with patch.object(bank_module, "datetime", NightClock):
-    expect_error("deposit at night", lambda: bank.deposit(artur_bank_account.account_id, 10), InvalidOperationError)
-    expect_error("withdraw at night", lambda: bank.withdraw(artur_bank_account.account_id, 10), InvalidOperationError)
+    expect_error(
+        "deposit at night",
+        lambda: bank.deposit(artur_bank_account.account_id, 10),
+        InvalidOperationError,
+    )
+    expect_error(
+        "withdraw at night",
+        lambda: bank.withdraw(artur_bank_account.account_id, 10),
+        InvalidOperationError,
+    )
 
 print(artur_bank_account.balance)
 bank.deposit(artur_bank_account.account_id, 10)

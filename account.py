@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from uuid import uuid4
 
+from validators import ensure_number
+
 
 class AccountStatus(Enum):
     ACTIVE = "active"
@@ -60,10 +62,7 @@ class AbstractAccount(ABC):
 
         self._owner = owner
 
-        if not isinstance(balance, (int, float)) or isinstance(balance, bool):
-            raise TypeError(
-                f"balance must be an int or float, got {type(balance).__name__}"
-            )
+        ensure_number(balance, "balance")
 
         if balance < 0:
             raise ValueError(f"balance cannot be negative, got {balance}")
@@ -84,18 +83,27 @@ class AbstractAccount(ABC):
 
         self._status = status
 
-        self._account_id = account_id if account_id is not None else uuid4().hex
+        if account_id is None:
+            account_id = uuid4().hex[:8]
+        else:
+            if not isinstance(account_id, str):
+                raise TypeError(
+                    f"account_id must be a string, got {type(account_id).__name__}"
+                )
+                
+            account_id = account_id.strip()
+            
+            if len(account_id) == 0:
+                raise ValueError("account_id should not be empty")
+        
+        self._account_id = account_id
 
     def __str__(self):
-        return f"{type(self).__name__} | {self._owner} | {self.short_account_id} | {self._status.value} | {self._balance} {self._currency.value}"
+        return f"{type(self).__name__} | {self._owner} | {self._account_id} | {self._status.value} | {self._balance} {self._currency.value}"
 
     @property
     def account_id(self):
         return self._account_id
-
-    @property
-    def short_account_id(self):
-        return self._account_id[-4:]
 
     @property
     def owner(self):
@@ -159,10 +167,7 @@ class AbstractAccount(ABC):
         raise AccountClosedError(f"cannot {operation}: account is {self._status.value}")
 
     def _validate_amount(self, amount):
-        if not isinstance(amount, (int, float)) or isinstance(amount, bool):
-            raise TypeError(
-                f"amount must be an int or float, got {type(amount).__name__}"
-            )
+        ensure_number(amount, "amount")
 
         if amount <= 0:
             raise InvalidOperationError(f"amount must be positive, got {amount}")
@@ -210,20 +215,14 @@ class SavingsAccount(BankAccount):
     ):
         super().__init__(owner, balance, currency, status, account_id)
 
-        if not isinstance(min_balance, (int, float)) or isinstance(min_balance, bool):
-            raise TypeError(
-                f"min_balance must be an int or float, got {type(min_balance).__name__}"
-            )
+        ensure_number(min_balance, "min_balance")
 
         if min_balance < 0:
             raise ValueError(f"min_balance cannot be negative, got {min_balance}")
 
         self._min_balance = min_balance
 
-        if not isinstance(monthly_rate, (int, float)) or isinstance(monthly_rate, bool):
-            raise TypeError(
-                f"monthly_rate must be an int or float, got {type(monthly_rate).__name__}"
-            )
+        ensure_number(monthly_rate, "monthly_rate")
 
         if monthly_rate < 0:
             raise ValueError(f"monthly_rate cannot be negative, got {monthly_rate}")
@@ -274,12 +273,7 @@ class PremiumAccount(BankAccount):
         super().__init__(owner, balance, currency, status, account_id)
 
         if max_withdrawal is not None:
-            if not isinstance(max_withdrawal, (int, float)) or isinstance(
-                max_withdrawal, bool
-            ):
-                raise TypeError(
-                    f"max_withdrawal must be an int or float, got {type(max_withdrawal).__name__}"
-                )
+            ensure_number(max_withdrawal, "max_withdrawal")
             if max_withdrawal <= 0:
                 raise ValueError(
                     f"max_withdrawal should be positive, got {max_withdrawal}"
@@ -287,12 +281,7 @@ class PremiumAccount(BankAccount):
 
         self._max_withdrawal = max_withdrawal
 
-        if not isinstance(overdraft_limit, (int, float)) or isinstance(
-            overdraft_limit, bool
-        ):
-            raise TypeError(
-                f"overdraft_limit must be an int or float, got {type(overdraft_limit).__name__}"
-            )
+        ensure_number(overdraft_limit, "overdraft_limit")
 
         if overdraft_limit < 0:
             raise ValueError(
@@ -301,12 +290,7 @@ class PremiumAccount(BankAccount):
 
         self._overdraft_limit = overdraft_limit
 
-        if not isinstance(withdrawal_fee, (int, float)) or isinstance(
-            withdrawal_fee, bool
-        ):
-            raise TypeError(
-                f"withdrawal_fee must be an int or float, got {type(withdrawal_fee).__name__}"
-            )
+        ensure_number(withdrawal_fee, "withdrawal_fee")
 
         if withdrawal_fee < 0:
             raise ValueError(f"withdrawal_fee cannot be negative, got {withdrawal_fee}")
@@ -387,10 +371,7 @@ class InvestmentAccount(BankAccount):
                     f"asset_type must be {self.ASSET_TYPES}, got {key}"
                 )
 
-            if not isinstance(rate, (int, float)) or isinstance(rate, bool):
-                raise TypeError(
-                    f"value should be int or float, got {type(rate).__name__}"
-                )
+            ensure_number(rate, f"growth rate for {key}")
 
         by_asset = {}
         total = 0
