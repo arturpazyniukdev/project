@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from uuid import uuid4
 
+from currency import Currency
 from validators import ensure_number
 
 
@@ -9,14 +10,6 @@ class AccountStatus(Enum):
     ACTIVE = "active"
     FROZEN = "frozen"
     CLOSED = "closed"
-
-
-class Currency(Enum):
-    USD = "USD"
-    RUB = "RUB"
-    EUR = "EUR"
-    KZT = "KZT"
-    CNY = "CNY"
 
 
 class BankError(Exception):
@@ -46,21 +39,23 @@ class AuthenticationError(BankError):
 class AbstractAccount(ABC):
     def __init__(
         self,
-        owner,
+        client_id,
         balance=0,
         currency=Currency.USD,
         status=AccountStatus.ACTIVE,
         account_id=None,
     ):
-        if not isinstance(owner, str):
-            raise TypeError(f"owner must be a string, got {type(owner).__name__}")
+        if not isinstance(client_id, str):
+            raise TypeError(
+                f"client_id must be a string, got {type(client_id).__name__}"
+            )
 
-        owner = owner.strip()
+        client_id = client_id.strip()
 
-        if len(owner) == 0:
-            raise ValueError("owner should not be empty")
+        if len(client_id) == 0:
+            raise ValueError("client_id should not be empty")
 
-        self._owner = owner
+        self._client_id = client_id
 
         ensure_number(balance, "balance")
 
@@ -90,24 +85,24 @@ class AbstractAccount(ABC):
                 raise TypeError(
                     f"account_id must be a string, got {type(account_id).__name__}"
                 )
-                
+
             account_id = account_id.strip()
-            
+
             if len(account_id) == 0:
                 raise ValueError("account_id should not be empty")
-        
+
         self._account_id = account_id
 
     def __str__(self):
-        return f"{type(self).__name__} | {self._owner} | {self._account_id} | {self._status.value} | {self._balance} {self._currency.value}"
+        return f"{type(self).__name__} | {self._client_id} | {self._account_id[-4:]} | {self._status.value} | {self._balance} {self._currency.value}"
 
     @property
     def account_id(self):
         return self._account_id
 
     @property
-    def owner(self):
-        return self._owner
+    def client_id(self):
+        return self._client_id
 
     @property
     def balance(self):
@@ -131,6 +126,14 @@ class AbstractAccount(ABC):
 
     @abstractmethod
     def withdraw(self, amount):
+        pass
+
+    @abstractmethod
+    def ensure_can_deposit(self, amount):
+        pass
+
+    @abstractmethod
+    def ensure_can_withdraw(self, amount):
         pass
 
     def close(self):
@@ -177,7 +180,7 @@ class BankAccount(AbstractAccount):
     def get_account_info(self):
         info = {
             "account_id": self.account_id,
-            "owner": self.owner,
+            "client_id": self.client_id,
             "balance": self.balance,
             "currency": self.currency.value,
             "status": self.status.value,
@@ -185,12 +188,11 @@ class BankAccount(AbstractAccount):
 
         return info
 
-    def deposit(self, amount):
+    def ensure_can_deposit(self, amount):
         self._ensure_active("deposit")
         self._validate_amount(amount)
-        self._balance += amount
 
-    def withdraw(self, amount):
+    def ensure_can_withdraw(self, amount):
         self._ensure_active("withdraw")
         self._validate_amount(amount)
 
@@ -199,13 +201,19 @@ class BankAccount(AbstractAccount):
                 f"cannot withdraw {amount}, balance is only {self._balance}"
             )
 
+    def deposit(self, amount):
+        self.ensure_can_deposit(amount)
+        self._balance += amount
+
+    def withdraw(self, amount):
+        self.ensure_can_withdraw(amount)
         self._balance -= amount
 
 
 class SavingsAccount(BankAccount):
     def __init__(
         self,
-        owner,
+        client_id,
         balance=0,
         currency=Currency.USD,
         status=AccountStatus.ACTIVE,
@@ -213,7 +221,7 @@ class SavingsAccount(BankAccount):
         min_balance=0,
         monthly_rate=0.01,
     ):
-        super().__init__(owner, balance, currency, status, account_id)
+        super().__init__(client_id, balance, currency, status, account_id)
 
         ensure_number(min_balance, "min_balance")
 
@@ -241,18 +249,16 @@ class SavingsAccount(BankAccount):
             "monthly_rate": self._monthly_rate,
         }
 
-    def withdraw(self, amount):
-        self._ensure_active("withdraw")
-        self._validate_amount(amount)
+    def ensure_can_withdraw(self, amount):
+        super().ensure_can_withdraw(amount)
 
         if self._balance - amount < self._min_balance:
             raise InsufficientFundsError(
                 f"cannot withdraw {amount}: balance {self._balance} would drop below min {self._min_balance}"
             )
 
-        return super().withdraw(amount)
-
     def apply_monthly_interest(self):
+        self._ensure_active("apply_monthly_interest")
         interest = round(self._balance * self._monthly_rate, 2)
         self._balance = self._balance + interest
         return interest
@@ -261,7 +267,7 @@ class SavingsAccount(BankAccount):
 class PremiumAccount(BankAccount):
     def __init__(
         self,
-        owner,
+        client_id,
         balance=0,
         currency=Currency.USD,
         status=AccountStatus.ACTIVE,
@@ -270,7 +276,7 @@ class PremiumAccount(BankAccount):
         overdraft_limit=0,
         withdrawal_fee=0,
     ):
-        super().__init__(owner, balance, currency, status, account_id)
+        super().__init__(client_id, balance, currency, status, account_id)
 
         if max_withdrawal is not None:
             ensure_number(max_withdrawal, "max_withdrawal")
@@ -297,7 +303,7 @@ class PremiumAccount(BankAccount):
 
         self._withdrawal_fee = withdrawal_fee
 
-    def withdraw(self, amount):
+    def ensure_can_withdraw(self, amount):
         self._validate_amount(amount)
         self._ensure_active("withdraw")
 
@@ -312,6 +318,10 @@ class PremiumAccount(BankAccount):
             raise InsufficientFundsError(
                 f"cannot withdraw {amount}: balance {self._balance} would drop below overdraft_limit {self._overdraft_limit}"
             )
+
+    def withdraw(self, amount):
+        self.ensure_can_withdraw(amount)
+        corrected_amount = amount + self._withdrawal_fee
 
         self._balance -= corrected_amount
 
@@ -332,13 +342,13 @@ class InvestmentAccount(BankAccount):
 
     def __init__(
         self,
-        owner,
+        client_id,
         balance=0,
         currency=Currency.USD,
         status=AccountStatus.ACTIVE,
         account_id=None,
     ):
-        super().__init__(owner, balance, currency, status, account_id)
+        super().__init__(client_id, balance, currency, status, account_id)
 
         self._portfolio = {asset: 0 for asset in self.ASSET_TYPES}
 

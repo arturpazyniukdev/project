@@ -57,11 +57,11 @@ ivan = Client("Ivan", date(1997, 9, 16), "1234")
 bank.add_client(artur)
 expect_error("already exists", lambda: bank.add_client(artur))
 expect_error("not a client", lambda: bank.add_client("artur"), TypeError)
-artur_bank_account = BankAccount(artur.full_name, 900)
+artur_bank_account = BankAccount(artur.client_id, 900)
 bank.open_account(artur.client_id, artur_bank_account)
 expect_error(
     "client not in bank",
-    lambda: bank.open_account(maria.client_id, BankAccount(maria.full_name, 0)),
+    lambda: bank.open_account(maria.client_id, BankAccount(maria.client_id, 0)),
     InvalidOperationError,
 )
 
@@ -69,7 +69,7 @@ bank.deposit(artur_bank_account.account_id, 50)
 print(artur_bank_account.balance)
 
 bank.add_client(maria)
-maria_saving_account = SavingsAccount(maria.full_name, 500)
+maria_saving_account = SavingsAccount(maria.client_id, 500)
 bank.open_account(maria.client_id, maria_saving_account)
 expect_error(
     "same account open twice",
@@ -81,7 +81,7 @@ expect_error(
 )
 
 bank.add_client(ivan)
-ivan_investment_account = InvestmentAccount(ivan.full_name, 300)
+ivan_investment_account = InvestmentAccount(ivan.client_id, 300)
 bank.open_account(ivan.client_id, ivan_investment_account)
 
 print("total: ", bank.get_total_balance())
@@ -161,7 +161,7 @@ expect_error(
 )
 print(bank.get_suspicious_events())
 
-maria_premium_account = PremiumAccount(maria.full_name, 200)
+maria_premium_account = PremiumAccount(maria.client_id, 200)
 bank.open_account(maria.client_id, maria_premium_account)
 
 with patch.object(bank_module, "datetime", NightClock):

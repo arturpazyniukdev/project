@@ -7,9 +7,11 @@ from account import (
     AbstractAccount,
     AccountStatus,
     AuthenticationError,
+    BankAccount,
     InvalidOperationError,
 )
-from validators import ensure_number
+from currency import Currency, convert
+from validators import ensure_number, ensure_text
 
 
 class ClientStatus(Enum):
@@ -39,7 +41,7 @@ class Client:
             raise ValueError("full_name should not be empty")
 
         self._full_name = full_name
-        
+
         if client_id is None:
             self._client_id = uuid4().hex
         else:
@@ -47,12 +49,12 @@ class Client:
                 raise TypeError(
                     f"client_id must be a string, got {type(client_id).__name__}"
                 )
-                
+
             client_id = client_id.strip()
-            
+
             if len(client_id) == 0:
                 raise ValueError("client_id should not be empty")
-            
+
             self._client_id = client_id
 
         if not isinstance(status, ClientStatus):
@@ -188,6 +190,9 @@ class Bank:
                 f"account {account.account_id} already exists in the bank"
             )
 
+        if account.client_id != client_id:
+            raise InvalidOperationError("account does not belong to client")
+
         self._accounts[account.account_id] = account
 
         client.add_account(account.account_id)
@@ -216,13 +221,13 @@ class Bank:
         }
         self._suspicious_events.append(event)
 
-    def _get_account(self, account_id):
+    def _get_account(self, account_id) -> BankAccount:
         if account_id not in self._accounts:
             raise InvalidOperationError(f"account {account_id} does not exist")
 
         return self._accounts[account_id]
 
-    def _get_client(self, client_id):
+    def _get_client(self, client_id) -> Client:
         if client_id not in self._clients:
             raise InvalidOperationError(
                 f"client {client_id} does not exist in the bank"
@@ -238,19 +243,30 @@ class Bank:
                 f"cannot {operation}: bank is closed outside operating hours"
             )
 
-    def deposit(self, account_id, amount):
+    def ensure_can_deposit(self, account_id, amount):
         ensure_number(amount, "amount")
 
         account = self._get_account(account_id)
         self._ensure_operating_hours("deposit", account_id)
 
-        account.deposit(amount)
+        account.ensure_can_deposit(amount)
 
-    def withdraw(self, account_id, amount):
+    def ensure_can_withdraw(self, account_id, amount):
         ensure_number(amount, "amount")
 
         account = self._get_account(account_id)
         self._ensure_operating_hours("withdraw", account_id)
+
+        account.ensure_can_withdraw(amount)
+
+    def deposit(self, account_id, amount):
+        self.ensure_can_deposit(account_id, amount)
+        account = self._get_account(account_id)
+        account.deposit(amount)
+
+    def withdraw(self, account_id, amount):
+        self.ensure_can_withdraw(account_id, amount)
+        account = self._get_account(account_id)
 
         if amount >= self.LARGE_WITHDRAWAL:
             self._flag_suspicious("large_withdrawal", account_id, f"amount {amount}")
@@ -298,7 +314,7 @@ class Bank:
                 q = query.lower()
                 if (
                     q not in account.account_id.lower()
-                    and q not in account.owner.lower()
+                    and q not in account.client_id.lower()
                 ):
                     continue
 
@@ -312,15 +328,19 @@ class Bank:
 
         return result
 
-    def get_total_balance(self):
+    def get_total_balance(self, currency=Currency.USD):
+        if not isinstance(currency, Currency):
+            raise TypeError(
+                f"currency must be a Currency member, got {currency!r}; try Currency({currency!r})"
+            )
         result = sum(
-            account.balance
+            convert(account.balance, account.currency, currency)
             for account in self._accounts.values()
             if account.status is not AccountStatus.CLOSED
         )
         return round(result, 2)
 
-    def get_clients_ranking(self):
+    def get_clients_ranking(self, currency=Currency.USD):
         res = []
 
         for client in self._clients.values():
@@ -328,10 +348,13 @@ class Bank:
             for account_id in client.account_ids:
                 account = self._get_account(account_id)
                 if account.status is not AccountStatus.CLOSED:
-                    s += account.balance
+                    s += round(convert(account.balance, account.currency, currency), 2)
             res.append((client.full_name, s))
 
         return sorted(res, key=lambda pair: pair[1], reverse=True)
 
     def get_suspicious_events(self):
         return list(self._suspicious_events)
+
+    def get_account(self, account_id):
+        return self._get_account(account_id)
