@@ -8,9 +8,15 @@ from account import (
     AccountStatus,
     AuthenticationError,
     BankAccount,
+    BankError,
     InvalidOperationError,
+    RiskBlockedError,
 )
+from audit import AuditLevel, AuditLog
 from currency import Currency, convert
+import currency
+from risk import RiskAnalyzer, RiskLevel
+from transactions import TransactionType
 from validators import ensure_number, ensure_text
 
 
@@ -159,11 +165,25 @@ class Client:
 
 class Bank:
     LARGE_WITHDRAWAL = 10000
+    AUDIT_LEVEL_BY_RISK = {
+        RiskLevel.HIGH: AuditLevel.ERROR,
+        RiskLevel.MEDIUM: AuditLevel.WARNING,
+        RiskLevel.LOW: AuditLevel.INFO,
+    }
 
-    def __init__(self):
-        self._clients = {}
-        self._accounts = {}
-        self._suspicious_events = []
+    def __init__(self, risk_analyzer, audit_log):
+        if not isinstance(risk_analyzer, RiskAnalyzer):
+            raise TypeError()
+
+        self._risk_analyzer = risk_analyzer
+
+        if not isinstance(audit_log, AuditLog):
+            raise TypeError()
+
+        self._audit_log = audit_log
+
+        self._clients: dict[str, Client] = {}
+        self._accounts: dict[str, BankAccount] = {}
 
     def add_client(self, client):
         if not isinstance(client, Client):
@@ -178,7 +198,6 @@ class Bank:
 
     def open_account(self, client_id, account):
         client = self._get_client(client_id)
-        self._ensure_operating_hours("open account", client_id)
 
         if not isinstance(account, AbstractAccount):
             raise TypeError(
@@ -199,27 +218,15 @@ class Bank:
 
     def close_account(self, account_id):
         account = self._get_account(account_id)
-        self._ensure_operating_hours("close account", account_id)
         account.close()
 
     def freeze_account(self, account_id):
         account = self._get_account(account_id)
-        self._ensure_operating_hours("freeze account", account_id)
         account.freeze()
 
     def unfreeze_account(self, account_id):
         account = self._get_account(account_id)
-        self._ensure_operating_hours("unfreeze account", account_id)
         account.unfreeze()
-
-    def _flag_suspicious(self, kind, subject_id, detail):
-        event = {
-            "kind": kind,
-            "subject_id": subject_id,
-            "detail": detail,
-            "at": datetime.now(),
-        }
-        self._suspicious_events.append(event)
 
     def _get_account(self, account_id) -> BankAccount:
         if account_id not in self._accounts:
@@ -235,43 +242,95 @@ class Bank:
 
         return self._clients[client_id]
 
-    def _ensure_operating_hours(self, operation, subject_id):
-        hour = datetime.now().hour
-        if 0 <= hour < 5:
-            self._flag_suspicious("after_hours", subject_id, operation)
-            raise InvalidOperationError(
-                f"cannot {operation}: bank is closed outside operating hours"
-            )
-
     def ensure_can_deposit(self, account_id, amount):
         ensure_number(amount, "amount")
-
         account = self._get_account(account_id)
-        self._ensure_operating_hours("deposit", account_id)
-
         account.ensure_can_deposit(amount)
 
     def ensure_can_withdraw(self, account_id, amount):
         ensure_number(amount, "amount")
-
         account = self._get_account(account_id)
-        self._ensure_operating_hours("withdraw", account_id)
-
         account.ensure_can_withdraw(amount)
 
-    def deposit(self, account_id, amount):
+    def _do_deposit(self, account_id, amount):
         self.ensure_can_deposit(account_id, amount)
         account = self._get_account(account_id)
         account.deposit(amount)
 
-    def withdraw(self, account_id, amount):
+    def deposit(self, account_id, amount):
+        account = self._get_account(account_id)
+        risk_level, risk_reason = self._risk_analyzer.assess(
+            None, account_id, amount, account.currency
+        )
+
+        self._audit_log.write(
+            TransactionType.DEPOSIT,
+            None,
+            account_id,
+            amount,
+            account.currency,
+            self.AUDIT_LEVEL_BY_RISK[risk_level],
+            risk_level,
+            risk_reason,
+        )
+
+        if risk_level is RiskLevel.HIGH:
+            raise RiskBlockedError(f"blocked: {risk_reason}")
+
+        self._do_deposit(account_id, amount)
+
+    def _do_withdraw(self, account_id, amount):
         self.ensure_can_withdraw(account_id, amount)
         account = self._get_account(account_id)
-
-        if amount >= self.LARGE_WITHDRAWAL:
-            self._flag_suspicious("large_withdrawal", account_id, f"amount {amount}")
-
         account.withdraw(amount)
+
+    def withdraw(self, account_id, amount):
+        account = self._get_account(account_id)
+
+        risk_level, risk_reason = self._risk_analyzer.assess(
+            account_id, None, amount, account.currency
+        )
+
+        self._audit_log.write(
+            TransactionType.WITHDRAWAL,
+            account_id,
+            None,
+            amount,
+            account.currency,
+            self.AUDIT_LEVEL_BY_RISK[risk_level],
+            risk_level,
+            risk_reason,
+        )
+
+        if risk_level is RiskLevel.HIGH:
+            raise RiskBlockedError(f"blocked: {risk_reason}")
+
+        self._do_withdraw(account_id, amount)
+
+    def transfer(self, sender_id, receiver_id, withdrawn_amount, deposited_amount):
+        currency = self._get_account(sender_id).currency
+        risk_level, risk_reason = self._risk_analyzer.assess(
+            sender_id, receiver_id, withdrawn_amount, currency
+        )
+
+        self._audit_log.write(
+            TransactionType.TRANSFER,
+            sender_id,
+            receiver_id,
+            withdrawn_amount,
+            currency,
+            self.AUDIT_LEVEL_BY_RISK[risk_level],
+            risk_level,
+            risk_reason,
+        )
+
+        if risk_level is RiskLevel.HIGH:
+            raise RiskBlockedError(f"blocked: {risk_reason}")
+
+        self.ensure_can_withdraw(sender_id, withdrawn_amount)
+        self.ensure_can_deposit(receiver_id, deposited_amount)
+        self._do_withdraw(sender_id, withdrawn_amount)
+        self._do_deposit(receiver_id, deposited_amount)
 
     def authenticate_client(self, client_id, pin):
         client = self._get_client(client_id)
@@ -286,7 +345,6 @@ class Bank:
             return
         else:
             client.register_failed_attempt()
-            self._flag_suspicious("failed_login", client_id, "wrong pin")
             raise AuthenticationError(f"wrong pin for client {client_id}")
 
     def search_accounts(self, query=None, status=None, account_type=None):
@@ -328,6 +386,20 @@ class Bank:
 
         return result
 
+    def _get_client_accounts(self, client_id):
+        client_id = ensure_text(client_id, "client_id")
+        client = self._clients[client_id]
+        if not isinstance(client, Client):
+            raise TypeError()
+        return client.account_ids
+
+    def get_client_risk_profile(self, client_id):
+        client_id = ensure_text(client_id, "client_id")
+
+        return self._audit_log.get_entries(
+            [RiskLevel.HIGH, RiskLevel.MEDIUM], self._get_client_accounts(client_id)
+        )
+
     def get_total_balance(self, currency=Currency.USD):
         if not isinstance(currency, Currency):
             raise TypeError(
@@ -352,9 +424,6 @@ class Bank:
             res.append((client.full_name, s))
 
         return sorted(res, key=lambda pair: pair[1], reverse=True)
-
-    def get_suspicious_events(self):
-        return list(self._suspicious_events)
 
     def get_account(self, account_id):
         return self._get_account(account_id)

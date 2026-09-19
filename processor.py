@@ -59,7 +59,7 @@ class TransactionProcessor:
                 queue.add(
                     entry.transaction,
                     entry.priority,
-                    datetime.now() + timedelta(milliseconds=500 * attempts)
+                    datetime.now() + timedelta(milliseconds=500 * attempts),
                 )
             entry = queue.pop_next()
 
@@ -89,10 +89,9 @@ class TransactionProcessor:
                 receiver = self._bank.get_account(receiver_id)
                 withdrawn_amount = convert(tx.amount, tx.currency, sender.currency)
                 deposited_amount = convert(tx.amount, tx.currency, receiver.currency)
-                self._bank.ensure_can_withdraw(sender_id, withdrawn_amount)
-                self._bank.ensure_can_deposit(receiver_id, deposited_amount)
-                self._bank.withdraw(sender_id, withdrawn_amount)
-                self._bank.deposit(receiver_id, deposited_amount)
+                self._bank.transfer(
+                    sender_id, receiver_id, withdrawn_amount, deposited_amount
+                )
             elif transaction_type is TransactionType.EXTERNAL_TRANSFER:
                 sender_id = tx.sender_id
                 sender = self._bank.get_account(sender_id)

@@ -36,6 +36,10 @@ class AuthenticationError(BankError):
     pass
 
 
+class RiskBlockedError(BankError):
+    pass
+
+
 class AbstractAccount(ABC):
     def __init__(
         self,

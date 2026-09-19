@@ -1,13 +1,15 @@
 from datetime import date, datetime, timedelta
 from time import sleep
 from account import BankAccount, PremiumAccount
+from audit import AuditLog
 from bank import Bank, Client
 from currency import Currency
 from processor import TransactionProcessor
+from risk import RiskAnalyzer
 from transactions import Priority, Transaction, TransactionQueue, TransactionType
 
 queue = TransactionQueue()
-bank = Bank()
+bank = Bank(RiskAnalyzer(), AuditLog("audit.jsonl"))
 processor = TransactionProcessor(bank)
 
 artur = Client("Artur", date(1997, 3, 1), "1234")
