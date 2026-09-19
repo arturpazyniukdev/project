@@ -29,7 +29,9 @@ class RiskAnalyzer:
 
     def assess(self, sender_id, receiver_id, amount, currency) -> tuple[RiskLevel, str]:
         if sender_id is None and receiver_id is None:
-            raise InvalidOperationError()
+            raise InvalidOperationError(
+                "cannot assess: sender_id and receiver_id are both None"
+            )
         subject_id = ensure_text(sender_id or receiver_id, "subject_id")
         ensure_number(amount, "amount")
 

@@ -173,12 +173,16 @@ class Bank:
 
     def __init__(self, risk_analyzer, audit_log):
         if not isinstance(risk_analyzer, RiskAnalyzer):
-            raise TypeError()
+            raise TypeError(
+                f"risk_analyzer must be a RiskAnalyzer, got {type(risk_analyzer).__name__}"
+            )
 
         self._risk_analyzer = risk_analyzer
 
         if not isinstance(audit_log, AuditLog):
-            raise TypeError()
+            raise TypeError(
+                f"audit_log must be an AuditLog, got {type(audit_log).__name__}"
+            )
 
         self._audit_log = audit_log
 
@@ -275,7 +279,7 @@ class Bank:
         )
 
         if risk_level is RiskLevel.HIGH:
-            raise RiskBlockedError(f"blocked: {risk_reason}")
+            raise RiskBlockedError(f"cannot deposit: blocked by risk ({risk_reason})")
 
         self._do_deposit(account_id, amount)
 
@@ -303,7 +307,7 @@ class Bank:
         )
 
         if risk_level is RiskLevel.HIGH:
-            raise RiskBlockedError(f"blocked: {risk_reason}")
+            raise RiskBlockedError(f"cannot withdraw: blocked by risk ({risk_reason})")
 
         self._do_withdraw(account_id, amount)
 
@@ -325,7 +329,7 @@ class Bank:
         )
 
         if risk_level is RiskLevel.HIGH:
-            raise RiskBlockedError(f"blocked: {risk_reason}")
+            raise RiskBlockedError(f"cannot transfer: blocked by risk ({risk_reason})")
 
         self.ensure_can_withdraw(sender_id, withdrawn_amount)
         self.ensure_can_deposit(receiver_id, deposited_amount)
@@ -386,18 +390,16 @@ class Bank:
 
         return result
 
-    def _get_client_accounts(self, client_id):
+    def get_client_account_ids(self, client_id):
         client_id = ensure_text(client_id, "client_id")
-        client = self._clients[client_id]
-        if not isinstance(client, Client):
-            raise TypeError()
+        client = self._get_client(client_id)
         return client.account_ids
 
     def get_client_risk_profile(self, client_id):
         client_id = ensure_text(client_id, "client_id")
 
         return self._audit_log.get_entries(
-            [RiskLevel.HIGH, RiskLevel.MEDIUM], self._get_client_accounts(client_id)
+            [RiskLevel.HIGH, RiskLevel.MEDIUM], self.get_client_account_ids(client_id)
         )
 
     def get_total_balance(self, currency=Currency.USD):

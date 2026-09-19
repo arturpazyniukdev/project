@@ -26,7 +26,10 @@ class AuditLogEntry:
         risk_reason,
     ) -> None:
         if not isinstance(operation, TransactionType):
-            raise TypeError()
+            raise TypeError(
+                f"operation must be a TransactionType member, got {operation!r}; "
+                f"try TransactionType({operation!r})"
+            )
         self._operation = operation
 
         if sender_id is not None:
@@ -42,21 +45,30 @@ class AuditLogEntry:
         self._amount = ensure_number(amount, "amount")
 
         if not isinstance(currency, Currency):
-            raise TypeError()
+            raise TypeError(
+                f"currency must be a Currency member, got {currency!r}; try Currency({currency!r})"
+            )
 
         self._currency = currency
 
         if not isinstance(level, AuditLevel):
-            raise TypeError()
+            raise TypeError(
+                f"level must be an AuditLevel member, got {level!r}; try AuditLevel({level!r})"
+            )
 
         self._level = level
 
         if not isinstance(risk_level, RiskLevel):
-            raise TypeError()
+            raise TypeError(
+                f"risk_level must be a RiskLevel member, got {risk_level!r}; "
+                f"try RiskLevel({risk_level!r})"
+            )
         self._risk_level = risk_level
 
         if not isinstance(risk_reason, str):
-            raise TypeError()
+            raise TypeError(
+                f"risk_reason must be a string, got {type(risk_reason).__name__}"
+            )
 
         self._risk_reason = risk_reason
 
@@ -140,13 +152,19 @@ class AuditLog:
             account_id = [account_id]
 
         if risk_level is not None and not isinstance(risk_level, list):
-            raise TypeError()
+            raise TypeError(
+                f"risk_level must be a RiskLevel member or a list of them, got {risk_level!r}"
+            )
 
         if account_id is not None and not isinstance(account_id, list):
-            raise TypeError()
+            raise TypeError(
+                f"account_id must be a string or a list of strings, got {account_id!r}"
+            )
 
         if level is not None and not isinstance(level, AuditLevel):
-            raise TypeError()
+            raise TypeError(
+                f"level must be an AuditLevel member, got {level!r}; try AuditLevel({level!r})"
+            )
 
         for el in self._entries:
             if risk_level is not None and el.risk_level not in risk_level:

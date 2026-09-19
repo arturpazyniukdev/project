@@ -221,6 +221,11 @@ class QueueEntry:
             raise TypeError(f"run_at must be a datetime, got {type(run_at).__name__}")
         self._run_at = run_at
 
+    def __repr__(self):
+        entry = f"{self._transaction} | {self._priority} | {self._run_at}"
+
+        return f"QueueEntry({entry})"
+
     @property
     def transaction(self) -> Transaction:
         return self._transaction

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from account import BankError, InvalidOperationError
 from bank import Bank
-from currency import convert
+from currency import Currency, convert
 from transactions import QueueEntry, Transaction, TransactionQueue, TransactionType
 from validators import ensure_text
 
@@ -16,6 +16,7 @@ class TransactionProcessor:
 
         self._bank = bank
         self._errors = []
+        self._processed: list[Transaction] = []
 
     def _calculate_fee(self, transaction):
         if not isinstance(transaction, Transaction):
@@ -45,6 +46,37 @@ class TransactionProcessor:
     def get_errors(self):
         return list(self._errors)
 
+    def get_stats(self, currency=Currency.USD):
+        if not isinstance(currency, Currency):
+            raise TypeError(
+                f"currency must be a Currency member, got {currency!r}; try Currency({currency!r})"
+            )
+
+        total = 0
+        by_type = {}
+        by_status = {}
+        volume = 0
+
+        for el in self._processed:
+            total += 1
+            volume += convert(el.amount, el.currency, currency)
+            if el.transaction_type in by_type:
+                by_type[el.transaction_type] += 1
+            else:
+                by_type[el.transaction_type] = 1
+
+            if el.status in by_status:
+                by_status[el.status] += 1
+            else:
+                by_status[el.status] = 1
+
+        return {
+            "total": total,
+            "by_type": by_type,
+            "by_status": by_status,
+            "volume": round(volume, 2),
+        }
+
     def process_all(self, queue):
         if not isinstance(queue, TransactionQueue):
             raise TypeError(
@@ -70,6 +102,8 @@ class TransactionProcessor:
         tx = entry.transaction
         transaction_type = tx.transaction_type
         tx.mark_processing()
+        if tx.attempts == 1:
+            self._processed.append(tx)
 
         try:
             if transaction_type is TransactionType.DEPOSIT:

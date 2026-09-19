@@ -33,9 +33,11 @@ with patch.object(risk_module, "datetime", NightClock):
     bank.deposit(maria_account.account_id, 250)
     expect_error(
         "new interraction and outside working hours",
-        lambda: bank.transfer(maria_account.account_id, artur_account.account_id, 100, 100),
+        lambda: bank.transfer(
+            maria_account.account_id, artur_account.account_id, 100, 100
+        ),
     )
-    
+
 expect_error("high risk deposit", lambda: bank.deposit(artur_account.account_id, 1001))
 expect_error("high risk deposit", lambda: bank.deposit(artur_account.account_id, 1001))
 bank.deposit(artur_account.account_id, 1000)
@@ -43,8 +45,6 @@ expect_error(
     "frequent operations exceeeded",
     lambda: bank.deposit(artur_account.account_id, 1000),
 )
-
-
 
 
 print("---suspicious ops---")
