@@ -1,9 +1,18 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
 from currency import Currency
 from validators import ensure_number
+
+from typing import TypedDict
+
+
+class BalancePoint(TypedDict):
+    at: datetime
+    balance: float
+    delta: float
 
 
 class AccountStatus(Enum):
@@ -49,6 +58,9 @@ class AbstractAccount(ABC):
         status=AccountStatus.ACTIVE,
         account_id=None,
     ):
+        self._history: list[BalancePoint] = []
+        self._balance = 0
+
         if not isinstance(client_id, str):
             raise TypeError(
                 f"client_id must be a string, got {type(client_id).__name__}"
@@ -66,7 +78,7 @@ class AbstractAccount(ABC):
         if balance < 0:
             raise ValueError(f"balance cannot be negative, got {balance}")
 
-        self._balance = balance
+        self._set_balance(balance)
 
         if not isinstance(currency, Currency):
             raise TypeError(
@@ -120,6 +132,10 @@ class AbstractAccount(ABC):
     def status(self):
         return self._status
 
+    @property
+    def history(self):
+        return list(self._history)
+
     @abstractmethod
     def get_account_info(self):
         pass
@@ -164,6 +180,18 @@ class AbstractAccount(ABC):
 
         self._status = AccountStatus.ACTIVE
 
+    def _set_balance(self, amount):
+        amount = ensure_number(amount, "amount")
+        old_balance = self._balance
+        self._balance = amount
+        self._history.append(
+            {
+                "at": datetime.now(),
+                "balance": self._balance,
+                "delta": round(self._balance - old_balance, 2),
+            }
+        )
+
     def _ensure_active(self, operation):
         if self._status is AccountStatus.ACTIVE:
             return
@@ -207,11 +235,11 @@ class BankAccount(AbstractAccount):
 
     def deposit(self, amount):
         self.ensure_can_deposit(amount)
-        self._balance += amount
+        self._set_balance(self._balance + amount)
 
     def withdraw(self, amount):
         self.ensure_can_withdraw(amount)
-        self._balance -= amount
+        self._set_balance(self._balance - amount)
 
 
 class SavingsAccount(BankAccount):
@@ -264,7 +292,7 @@ class SavingsAccount(BankAccount):
     def apply_monthly_interest(self):
         self._ensure_active("apply_monthly_interest")
         interest = round(self._balance * self._monthly_rate, 2)
-        self._balance = self._balance + interest
+        self._set_balance(self._balance + interest)
         return interest
 
 
@@ -327,7 +355,7 @@ class PremiumAccount(BankAccount):
         self.ensure_can_withdraw(amount)
         corrected_amount = amount + self._withdrawal_fee
 
-        self._balance -= corrected_amount
+        self._set_balance(self._balance - corrected_amount)
 
     def get_account_info(self):
         return {
@@ -371,7 +399,7 @@ class InvestmentAccount(BankAccount):
             )
 
         self._portfolio[asset_type] += amount
-        self._balance -= amount
+        self._set_balance(self._balance - amount)
 
     def project_yearly_growth(self, growth_rates):
         if not isinstance(growth_rates, dict):

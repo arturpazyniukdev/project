@@ -4,6 +4,7 @@ from audit import AuditLog
 from bank import Bank, Client
 from currency import Currency
 from processor import TransactionProcessor
+from report import ReportBuilder
 from risk import RiskAnalyzer, RiskLevel
 from transactions import Priority, Transaction, TransactionQueue, TransactionType
 
@@ -40,7 +41,7 @@ bank.add_client(stas)
 bank.open_account(stas.client_id, stas_account)
 bank.open_account(stas.client_id, stas_account_2)
 
-nastya = Client("nastya", date(1997, 1, 16), "1234")
+nastya = Client("Nastya", date(1997, 1, 16), "1234")
 nastya_account = BankAccount(nastya.client_id, 100)
 nastya_account_2 = SavingsAccount(nastya.client_id, 100)
 bank.add_client(nastya)
@@ -398,3 +399,23 @@ print("---statistics---")
 print(processor.get_stats())
 print("---total balance---")
 print(bank.get_total_balance())
+
+report_builder = ReportBuilder(bank, audit_log)
+
+client_report = report_builder.build_client_report(artur.client_id)
+bank_report = report_builder.build_bank_report()
+risk_report = report_builder.build_risk_report()
+
+print(report_builder.render_client_report(client_report))
+print(report_builder.render_bank_report(bank_report))
+print(report_builder.render_risk_report(risk_report))
+
+report_builder.export_to_json(client_report, "client_report.json")
+report_builder.export_to_json(bank_report, "bank_report.json")
+report_builder.export_to_json(risk_report, "risk_report.json")
+
+report_builder.export_to_csv(report_builder.build_account_rows(), "accounts.csv")
+report_builder.export_to_csv(report_builder.build_client_rows(), "clients.csv")
+report_builder.export_to_csv(report_builder.build_risk_rows(), "risks.csv")
+
+report_builder.save_charts("charts", artur_account.account_id)

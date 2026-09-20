@@ -2,3 +2,8 @@ __pycache__/
 *.py[cod]
 audit.jsonl
 log.json
+
+# generated reports
+charts/
+*.csv
+*_report.json

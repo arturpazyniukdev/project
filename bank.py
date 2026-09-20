@@ -129,6 +129,22 @@ class Client:
         return self._full_name
 
     @property
+    def status(self):
+        return self._status
+
+    @property
+    def phone(self):
+        return self._phone
+
+    @property
+    def email(self):
+        return self._email
+
+    @property
+    def birth_date(self):
+        return self._birth_date
+
+    @property
     def account_ids(self):
         return list(self._account_ids)
 
@@ -199,7 +215,7 @@ class Bank:
         self._clients[client.client_id] = client
 
     def open_account(self, client_id, account):
-        client = self._get_client(client_id)
+        client = self.get_client(client_id)
 
         if not isinstance(account, AbstractAccount):
             raise TypeError(
@@ -236,7 +252,7 @@ class Bank:
 
         return self._accounts[account_id]
 
-    def _get_client(self, client_id) -> Client:
+    def get_client(self, client_id) -> Client:
         if client_id not in self._clients:
             raise InvalidOperationError(
                 f"client {client_id} does not exist in the bank"
@@ -335,7 +351,7 @@ class Bank:
         self._do_deposit(receiver_id, deposited_amount)
 
     def authenticate_client(self, client_id, pin):
-        client = self._get_client(client_id)
+        client = self.get_client(client_id)
 
         if not client.is_active():
             raise AuthenticationError("non active clients cannot login")
@@ -388,9 +404,15 @@ class Bank:
 
         return result
 
+    def get_accounts(self):
+        return list(self._accounts.values())
+
+    def get_clients(self):
+        return list(self._clients.values())
+
     def get_client_account_ids(self, client_id):
         client_id = ensure_text(client_id, "client_id")
-        client = self._get_client(client_id)
+        client = self.get_client(client_id)
         return client.account_ids
 
     def get_client_risk_profile(self, client_id):
