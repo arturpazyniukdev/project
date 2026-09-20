@@ -1,20 +1,18 @@
 from uuid import uuid4
 from enum import Enum
 
-from datetime import date, datetime
+from datetime import date
 
 from account import (
     AbstractAccount,
     AccountStatus,
     AuthenticationError,
     BankAccount,
-    BankError,
     InvalidOperationError,
     RiskBlockedError,
 )
 from audit import AuditLevel, AuditLog
 from currency import Currency, convert
-import currency
 from risk import RiskAnalyzer, RiskLevel
 from transactions import TransactionType
 from validators import ensure_number, ensure_text

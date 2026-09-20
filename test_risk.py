@@ -1,11 +1,11 @@
 from datetime import date, datetime
 from unittest.mock import patch
 from account import BankAccount
-from audit import AuditLevel, AuditLog
+from audit import AuditLog
 from bank import Bank, Client
 import risk as risk_module
 from helpers import expect_error
-from risk import RiskAnalyzer, RiskLevel
+from risk import RiskAnalyzer
 
 
 class NightClock(datetime):

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from time import sleep
 from account import BankError, InvalidOperationError
 from bank import Bank
 from currency import Currency, convert
@@ -25,7 +26,7 @@ class TransactionProcessor:
             )
 
         rate = self.FEE_RATES.get(transaction.transaction_type, 0)
-        return round(transaction.fee + transaction.amount * rate, 2)
+        return round(transaction.amount * rate, 2)
 
     def _log_error(self, transaction, reason):
         if not isinstance(transaction, Transaction):
@@ -83,17 +84,22 @@ class TransactionProcessor:
                 f"queue must be a TransactionQueue, got {type(queue).__name__}"
             )
 
-        entry = queue.pop_next()
-        while entry is not None:
-            success = self._process_entry(entry)
-            attempts = entry.transaction.attempts
-            if not success and attempts < self.MAX_ATTEMPTS:
-                queue.add(
-                    entry.transaction,
-                    entry.priority,
-                    datetime.now() + timedelta(milliseconds=500 * attempts),
-                )
+        while True:
             entry = queue.pop_next()
+            if entry is not None:
+                success = self._process_entry(entry)
+                attempts = entry.transaction.attempts
+                if not success and attempts < self.MAX_ATTEMPTS:
+                    queue.add(
+                        entry.transaction,
+                        entry.priority,
+                        datetime.now() + timedelta(milliseconds=500 * attempts),
+                    )
+            else:
+                run_at = queue.next_run_at()
+                if run_at is None:
+                    break
+                sleep(max(0, (run_at - datetime.now()).total_seconds()))
 
     def _process_entry(self, entry: QueueEntry | None):
         if entry is None:
@@ -131,6 +137,7 @@ class TransactionProcessor:
                 sender = self._bank.get_account(sender_id)
                 amount = convert(tx.amount, tx.currency, sender.currency)
                 fee = self._calculate_fee(tx)
+                tx.set_fee(fee)
                 amount += convert(fee, tx.currency, sender.currency)
                 self._bank.withdraw(sender_id, amount)
             else:

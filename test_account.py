@@ -1,7 +1,6 @@
 from account import (
     AccountStatus,
     Currency,
-    BankError,
     BankAccount,
     SavingsAccount,
     PremiumAccount,

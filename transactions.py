@@ -56,7 +56,6 @@ class Transaction:
         sender_id=None,
         receiver_id=None,
         transaction_id=None,
-        fee=0,
     ):
         if transaction_id is None:
             self._transaction_id = uuid4().hex
@@ -74,10 +73,7 @@ class Transaction:
             )
         self._currency = currency
 
-        ensure_number(fee, "fee")
-        if fee < 0:
-            raise ValueError(f"fee cannot be negative, got {fee}")
-        self._fee = fee
+        self._fee = 0
 
         if sender_id is not None:
             self._sender_id = ensure_text(sender_id, "sender_id")
@@ -196,6 +192,15 @@ class Transaction:
     def mark_cancelled(self):
         self._transition(TransactionStatus.CANCELLED)
 
+    def set_fee(self, fee):
+        fee = ensure_number(fee, "fee")
+        if fee < 0:
+            raise ValueError()
+        if self._status is not TransactionStatus.PROCESSING:
+            raise InvalidOperationError()
+
+        self._fee = fee
+
 
 class Priority(IntEnum):
     HIGH = 1
@@ -244,7 +249,7 @@ class QueueEntry:
 
 class TransactionQueue:
     def __init__(self):
-        self._entries = []
+        self._entries: list[QueueEntry] = []
 
     def add(
         self, transaction, priority=Priority.NORMAL, run_at: datetime | None = None
@@ -285,6 +290,24 @@ class TransactionQueue:
             return None
         self._entries.remove(entry)
         return entry
+
+    def next_run_at(self):
+        scheduled = []
+
+        for e in self._entries:
+            if e.transaction.status in (
+                TransactionStatus.PENDING,
+                TransactionStatus.FAILED,
+            ):
+                if e.run_at is not None:
+                    scheduled.append(e)
+
+        scheduled = sorted(scheduled, key=lambda e: e.run_at)
+
+        if len(scheduled) == 0:
+            return None
+
+        return scheduled[0].run_at
 
     def cancel(self, transaction_id):
         transaction_id = ensure_text(transaction_id, "transaction_id")

@@ -1,5 +1,4 @@
 from datetime import date, timedelta, datetime
-from time import sleep
 from account import BankAccount, SavingsAccount
 from audit import AuditLog
 from bank import Bank, Client
@@ -91,7 +90,6 @@ transactions = [
             "transaction_type": TransactionType.EXTERNAL_TRANSFER,
             "sender_id": artur_account.account_id,
             "receiver_id": "external_account",
-            "fee": 1,
         }
     },
     {
@@ -381,8 +379,6 @@ for el in transactions:
     print("queue entry added: ", t, priority, run_at)
 
 processor.process_all(queue)
-sleep(3)
-processor.process_all(queue)
 
 
 print("---accounts---")
@@ -391,7 +387,11 @@ for account_id in artur.account_ids:
 print("---history---")
 print(audit_log.get_entries(account_id=artur.account_ids))
 print("---suspicious---")
-print(audit_log.get_entries(risk_level=[RiskLevel.HIGH, RiskLevel.MEDIUM],account_id=artur.account_ids))
+print(
+    audit_log.get_entries(
+        risk_level=[RiskLevel.HIGH, RiskLevel.MEDIUM], account_id=artur.account_ids
+    )
+)
 print("---top 3 clients---")
 print(bank.get_clients_ranking()[:3])
 print("---statistics---")

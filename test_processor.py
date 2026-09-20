@@ -1,5 +1,4 @@
 from datetime import date, datetime, timedelta
-from time import sleep
 from account import BankAccount, PremiumAccount
 from audit import AuditLog
 from bank import Bank, Client
@@ -45,7 +44,6 @@ t4 = Transaction(
     TransactionType.EXTERNAL_TRANSFER,
     arturs_account.account_id,
     "external_account",
-    fee=1,
 )
 t5 = Transaction(
     100, Currency.USD, TransactionType.WITHDRAWAL, arturs_account.account_id
@@ -78,7 +76,5 @@ queue.cancel(t8.transaction_id)
 queue.add(t9)
 queue.add(t10)
 
-processor.process_all(queue)
-sleep(3)
 processor.process_all(queue)
 print("errors: ", processor.get_errors())
