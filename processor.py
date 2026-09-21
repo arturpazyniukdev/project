@@ -39,6 +39,7 @@ class TransactionProcessor:
         self._errors.append(
             {
                 "transaction_id": transaction.transaction_id,
+                "transaction_type": transaction.transaction_type,
                 "reason": reason,
                 "at": datetime.now(),
             }
@@ -77,6 +78,26 @@ class TransactionProcessor:
             "by_status": by_status,
             "volume": round(volume, 2),
         }
+
+    def get_error_stats(self):
+        s = set()
+        total = 0
+        by_operation = {}
+
+        for error in self._errors:
+            if error["transaction_id"] in s:
+                continue
+
+            s.add(error["transaction_id"])
+
+            total += 1
+            t = error["transaction_type"].value
+            if t in by_operation:
+                by_operation[t] += 1
+            else:
+                by_operation[t] = 1
+
+        return {"total": total, "by_operation": by_operation}
 
     def process_all(self, queue):
         if not isinstance(queue, TransactionQueue):

@@ -78,3 +78,4 @@ queue.add(t10)
 
 processor.process_all(queue)
 print("errors: ", processor.get_errors())
+print("error stats: ", processor.get_error_stats())

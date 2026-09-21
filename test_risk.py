@@ -4,6 +4,7 @@ from account import BankAccount
 from audit import AuditLog
 from bank import Bank, Client
 import risk as risk_module
+import bank as bank_module
 from helpers import expect_error
 from risk import RiskAnalyzer
 
@@ -29,10 +30,15 @@ maria_account = BankAccount(maria.client_id, 100)
 bank.add_client(maria)
 bank.open_account(maria.client_id, maria_account)
 
-with patch.object(risk_module, "datetime", NightClock):
-    bank.deposit(maria_account.account_id, 250)
+with (
+    patch.object(risk_module, "datetime", NightClock),
+    patch.object(bank_module, "datetime", NightClock),
+):
     expect_error(
-        "new interraction and outside working hours",
+        "outside working hours", lambda: bank.deposit(maria_account.account_id, 250)
+    )
+    expect_error(
+        "transfer at night",
         lambda: bank.transfer(
             maria_account.account_id, artur_account.account_id, 100, 100
         ),
@@ -51,5 +57,3 @@ print("---suspicious ops---")
 print(audit_log.get_suspicious_operations())
 print("---client risk profile---")
 print(bank.get_client_risk_profile(artur.client_id))
-print("---errors---")
-print(audit_log.get_error_stats())

@@ -1,7 +1,7 @@
 from uuid import uuid4
 from enum import Enum
 
-from datetime import date
+from datetime import datetime, date
 
 from account import (
     AbstractAccount,
@@ -184,6 +184,8 @@ class Bank:
         RiskLevel.MEDIUM: AuditLevel.WARNING,
         RiskLevel.LOW: AuditLevel.INFO,
     }
+    NIGHT_START_HOUR = 0
+    NIGHT_END_HOUR = 5
 
     def __init__(self, risk_analyzer, audit_log):
         if not isinstance(risk_analyzer, RiskAnalyzer):
@@ -260,6 +262,10 @@ class Bank:
 
         return self._clients[client_id]
 
+    def _ensure_operating_hours(self):
+        if self.NIGHT_START_HOUR <= datetime.now().hour < self.NIGHT_END_HOUR:
+            raise InvalidOperationError("outside working hours")
+
     def ensure_can_deposit(self, account_id, amount):
         ensure_number(amount, "amount")
         account = self._get_account(account_id)
@@ -276,6 +282,7 @@ class Bank:
         account.deposit(amount)
 
     def deposit(self, account_id, amount):
+        self._ensure_operating_hours()
         account = self._get_account(account_id)
         risk_level, risk_reason = self._risk_analyzer.assess(
             None, account_id, amount, account.currency
@@ -303,6 +310,8 @@ class Bank:
         account.withdraw(amount)
 
     def withdraw(self, account_id, amount):
+        self._ensure_operating_hours()
+
         account = self._get_account(account_id)
 
         risk_level, risk_reason = self._risk_analyzer.assess(
@@ -326,6 +335,7 @@ class Bank:
         self._do_withdraw(account_id, amount)
 
     def transfer(self, sender_id, receiver_id, withdrawn_amount, deposited_amount):
+        self._ensure_operating_hours()
         currency = self._get_account(sender_id).currency
         risk_level, risk_reason = self._risk_analyzer.assess(
             sender_id, receiver_id, withdrawn_amount, currency

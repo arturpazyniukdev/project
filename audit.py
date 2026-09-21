@@ -186,18 +186,3 @@ class AuditLog:
 
     def get_suspicious_operations(self):
         return [e for e in self._entries if e.risk_level is not RiskLevel.LOW]
-
-    def get_error_stats(self):
-        total = 0
-        by_operation: dict[TransactionType, int] = {}
-
-        for el in self._entries:
-            if el.level is AuditLevel.ERROR:
-                total += 1
-
-                if el.operation not in by_operation:
-                    by_operation[el.operation] = 1
-                else:
-                    by_operation[el.operation] += 1
-
-        return {"total": total, "by_operation": by_operation}
